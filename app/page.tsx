@@ -126,17 +126,26 @@ export default function Home() {
 
   async function analyze(event?: FormEvent) {
     event?.preventDefault();
+    await analyzeTicker(activeTicker, question);
+  }
+
+  async function analyzeTicker(symbol: string, prompt = "Why did it move today? Summarize related news and explain why it fell or went up.") {
     setLoading(true);
     setMessage("");
     try {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker: activeTicker, question })
+        body: JSON.stringify({ ticker: symbol, question: prompt })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Analysis failed.");
       setReport(data.report);
+      setQuestion(prompt);
+      setTicker(symbol.replace(/\.(NS|BO)$/i, ""));
+      if (symbol.endsWith(".NS")) setExchange("NSE");
+      if (symbol.endsWith(".BO")) setExchange("BSE");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Analysis failed.");
     } finally {
@@ -243,7 +252,11 @@ export default function Home() {
 
             <div className="grid gap-5 lg:grid-cols-2">
               <InsightSection icon={<Activity size={18} />} title="Move Drivers" items={report.moveDrivers} />
-              <InsightSection icon={<Newspaper size={18} />} title="News" items={report.news.map((item) => item.title)} />
+              <InsightSection
+                icon={<Newspaper size={18} />}
+                title="Related News Summary"
+                items={report.news.map((item) => `${item.title}${item.description ? ` — ${item.description}` : ""}`)}
+              />
               <InsightSection icon={<FileText size={18} />} title="Filings" items={report.filings.map((item) => `${item.form}: ${item.title}`)} />
               <InsightSection icon={<Radar size={18} />} title="Next Watch Items" items={report.nextWatchItems} />
             </div>
@@ -369,13 +382,19 @@ export default function Home() {
               {watchlist.map((item) => (
                 <div className="rounded border border-line px-3 py-2" key={item.id}>
                   <div className="flex items-start justify-between gap-3">
-                    <button className="text-left" onClick={() => setTicker(item.ticker)} type="button">
+                    <button
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => analyzeTicker(item.ticker)}
+                      type="button"
+                      title="Open related news and movement summary"
+                    >
                       <span className="block font-semibold">{item.ticker}</span>
                       {item.market ? (
                         <span className="mt-1 block text-xs text-muted">
                           Quote {formatCurrency(item.market.price, item.market.currency)} · {item.market.provider}
                         </span>
                       ) : null}
+                      <span className="mt-1 block text-xs text-cobalt">Click for news summary and why it moved</span>
                     </button>
                     <button className="icon-button" onClick={() => removeWatchlistItem(item.ticker)} title="Remove" type="button">
                       <Trash2 size={15} aria-hidden="true" />

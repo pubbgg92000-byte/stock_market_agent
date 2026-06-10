@@ -7,6 +7,7 @@ Saved watchlist tickers show the latest available price, quote-currency price, p
 NSE and BSE quotes are supported with `.NS` and `.BO` suffixes, and the app can add those suffixes from the exchange selector.
 Watchlist and top report prices refresh every 15 seconds while the app is open.
 The dashboard includes a persistent light/dark theme toggle.
+Clicking a watchlist ticker opens the top report with related news and a plain-language explanation of why it fell, rose, or stayed flat.
 
 ## Quick Start
 
