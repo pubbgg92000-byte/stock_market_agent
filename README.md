@@ -2,6 +2,8 @@
 
 AI-first stock intelligence MVP for ticker analysis, watchlists, SEC/news context, and Telegram alerts.
 
+Prices are displayed in the user's local currency by default, with a selector for INR, USD, EUR, GBP, JPY, and other currencies returned by the exchange-rate provider.
+
 ## Quick Start
 
 ```bash

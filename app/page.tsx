@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Activity, Bell, BriefcaseBusiness, FileText, Newspaper, Radar, Send, Star, Trash2 } from "lucide-react";
+import { Activity, Bell, BriefcaseBusiness, Coins, FileText, Newspaper, Radar, Send, Star, Trash2 } from "lucide-react";
+import { FALLBACK_USD_RATES, REGION_CURRENCY, type FxRatesPayload } from "@/lib/currency";
 import type { AnalysisReportPayload } from "@/lib/types";
 
 type WatchlistItem = {
@@ -25,6 +26,15 @@ export default function Home() {
   const [report, setReport] = useState<AnalysisReportPayload | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [alerts, setAlerts] = useState<AlertRule[]>([]);
+  const [fx, setFx] = useState<FxRatesPayload>({
+    base: "USD",
+    date: new Date().toISOString().slice(0, 10),
+    rates: FALLBACK_USD_RATES,
+    provider: "fallback",
+    fallback: true
+  });
+  const [currencyMode, setCurrencyMode] = useState("AUTO");
+  const [detectedCurrency, setDetectedCurrency] = useState("INR");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -32,6 +42,19 @@ export default function Home() {
     if (!report) return "Ready";
     return report.market.provider === "demo" ? "Demo data" : "Live providers";
   }, [report]);
+
+  const selectedCurrency = currencyMode === "AUTO" ? detectedCurrency : currencyMode;
+  const currencyOptions = useMemo(() => {
+    const priority = ["INR", "USD", "EUR", "GBP", "JPY", "CAD", "AUD", "SGD", "AED"];
+    const codes = Object.keys(fx.rates).sort();
+    return [...priority, ...codes.filter((code) => !priority.includes(code))];
+  }, [fx.rates]);
+
+  const priceInCurrency = useMemo(() => {
+    if (!report) return null;
+    const rate = fx.rates[selectedCurrency] ?? 1;
+    return report.market.price * rate;
+  }, [fx.rates, report, selectedCurrency]);
 
   async function refreshLists() {
     const [watchlistResponse, alertResponse] = await Promise.all([fetch("/api/watchlist"), fetch("/api/alerts")]);
@@ -43,7 +66,24 @@ export default function Home() {
 
   useEffect(() => {
     refreshLists().catch(() => setMessage("Could not load saved data."));
+    const locale = navigator.language || "en-IN";
+    const region = locale.split("-")[1]?.toUpperCase();
+    setDetectedCurrency(REGION_CURRENCY[region ?? "IN"] ?? "INR");
+    fetch("/api/fx")
+      .then((response) => response.json())
+      .then((data: FxRatesPayload) => setFx(data))
+      .catch(() => {
+        setMessage("Using fallback currency rates.");
+      });
   }, []);
+
+  function formatCurrency(value: number, currency = selectedCurrency) {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: currency === "JPY" ? 0 : 2
+    }).format(value);
+  }
 
   async function analyze(event?: FormEvent) {
     event?.preventDefault();
@@ -175,6 +215,32 @@ export default function Home() {
 
           <div className="rounded border border-line bg-white p-4">
             <div className="mb-3 flex items-center gap-2">
+              <Coins size={18} aria-hidden="true" />
+              <h2 className="text-base font-semibold">Currency</h2>
+            </div>
+            <label className="block text-sm font-medium">
+              Display prices in
+              <select
+                className="mt-1 w-full rounded border border-line bg-white px-3 py-2 text-sm outline-none focus:border-cobalt"
+                value={currencyMode}
+                onChange={(event) => setCurrencyMode(event.target.value)}
+              >
+                <option value="AUTO">Auto by location ({detectedCurrency})</option>
+                {currencyOptions.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="mt-2 text-xs leading-5 text-slate-600">
+              Market quotes arrive in USD. Display conversion uses {fx.provider}
+              {fx.fallback ? " fallback" : ""} rates from {fx.date}.
+            </p>
+          </div>
+
+          <div className="rounded border border-line bg-white p-4">
+            <div className="mb-3 flex items-center gap-2">
               <BriefcaseBusiness size={18} aria-hidden="true" />
               <h2 className="text-base font-semibold">Watchlist</h2>
             </div>
@@ -233,7 +299,8 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  <Metric label="Price" value={`$${report.market.price.toFixed(2)}`} />
+                  <Metric label={`Price (${selectedCurrency})`} value={formatCurrency(priceInCurrency ?? report.market.price)} />
+                  <Metric label="Base price" value={formatCurrency(report.market.price, "USD")} />
                   <Metric label="Move" value={`${report.market.changePct.toFixed(2)}%`} tone={report.market.changePct >= 0 ? "up" : "down"} />
                   <Metric label="Provider" value={report.market.provider} />
                 </div>
