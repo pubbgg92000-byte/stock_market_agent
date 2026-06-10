@@ -8,6 +8,7 @@ export type SourceLink = {
 export type MarketSnapshot = {
   ticker: string;
   price: number;
+  currency: string;
   changePct: number;
   volume?: number;
   provider: string;

@@ -22,7 +22,8 @@ type AlertRule = {
 };
 
 export default function Home() {
-  const [ticker, setTicker] = useState("NVDA");
+  const [ticker, setTicker] = useState("RELIANCE");
+  const [exchange, setExchange] = useState("NSE");
   const [question, setQuestion] = useState("Why did it move today?");
   const [report, setReport] = useState<AnalysisReportPayload | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
@@ -54,9 +55,10 @@ export default function Home() {
 
   const priceInCurrency = useMemo(() => {
     if (!report) return null;
-    const rate = fx.rates[selectedCurrency] ?? 1;
-    return report.market.price * rate;
+    return convertMarketPrice(report.market.price, report.market.currency, selectedCurrency, fx.rates);
   }, [fx.rates, report, selectedCurrency]);
+
+  const activeTicker = useMemo(() => resolveMarketTicker(ticker, exchange), [exchange, ticker]);
 
   async function refreshLists() {
     setWatchlistLoading(true);
@@ -84,6 +86,23 @@ export default function Home() {
       });
   }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      refreshLists().catch(() => null);
+      if (report?.ticker) {
+        fetch(`/api/quote?ticker=${encodeURIComponent(report.ticker)}`)
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.market) {
+              setReport((current) => (current ? { ...current, market: data.market } : current));
+            }
+          })
+          .catch(() => null);
+      }
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [report?.ticker]);
+
   function formatCurrency(value: number, currency = selectedCurrency) {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
@@ -100,7 +119,7 @@ export default function Home() {
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker, question })
+        body: JSON.stringify({ ticker: activeTicker, question })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Analysis failed.");
@@ -117,10 +136,10 @@ export default function Home() {
     const response = await fetch("/api/watchlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticker })
+      body: JSON.stringify({ ticker: activeTicker })
     });
     if (response.ok) {
-      setMessage(`${ticker.toUpperCase()} saved to watchlist.`);
+      setMessage(`${activeTicker} saved to watchlist.`);
       await refreshLists();
     }
   }
@@ -129,10 +148,10 @@ export default function Home() {
     const response = await fetch("/api/alerts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticker, priceMovePct: 3, newsImpact: true, filingDetected: true })
+      body: JSON.stringify({ ticker: activeTicker, priceMovePct: 3, newsImpact: true, filingDetected: true })
     });
     if (response.ok) {
-      setMessage(`Telegram alert rule created for ${ticker.toUpperCase()}.`);
+      setMessage(`Telegram alert rule created for ${activeTicker}.`);
       await refreshLists();
     }
   }
@@ -142,8 +161,8 @@ export default function Home() {
     await refreshLists();
   }
 
-  function convertedPrice(price: number) {
-    return price * (fx.rates[selectedCurrency] ?? 1);
+  function convertedPrice(price: number, fromCurrency = "USD") {
+    return convertMarketPrice(price, fromCurrency, selectedCurrency, fx.rates);
   }
 
   async function removeAlert(id: string) {
@@ -181,7 +200,49 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6 lg:grid-cols-[360px_1fr]">
+      <section className="mx-auto max-w-7xl px-5 pt-6">
+        {report ? (
+          <div className="space-y-5">
+            <div className="rounded border border-line bg-white p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-slate-500">{report.ticker}</p>
+                  <h2 className="mt-1 text-2xl font-semibold">{report.summary}</h2>
+                </div>
+                <div className="rounded border border-line px-4 py-3 text-right">
+                  <p className="text-sm text-slate-500">Confidence</p>
+                  <p className="text-2xl font-semibold">{report.confidence}%</p>
+                </div>
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-4">
+                <Metric label={`Live price (${selectedCurrency})`} value={formatCurrency(priceInCurrency ?? report.market.price)} />
+                <Metric label={`Quote price (${report.market.currency})`} value={formatCurrency(report.market.price, report.market.currency)} />
+                <Metric label="Move" value={`${report.market.changePct.toFixed(2)}%`} tone={report.market.changePct >= 0 ? "up" : "down"} />
+                <Metric label="Provider" value={report.market.provider} />
+              </div>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-2">
+              <InsightSection icon={<Activity size={18} />} title="Move Drivers" items={report.moveDrivers} />
+              <InsightSection icon={<Newspaper size={18} />} title="News" items={report.news.map((item) => item.title)} />
+              <InsightSection icon={<FileText size={18} />} title="Filings" items={report.filings.map((item) => `${item.form}: ${item.title}`)} />
+              <InsightSection icon={<Radar size={18} />} title="Next Watch Items" items={report.nextWatchItems} />
+            </div>
+          </div>
+        ) : (
+          <div className="flex min-h-[280px] items-center justify-center rounded border border-line bg-white p-8 text-center">
+            <div>
+              <Radar className="mx-auto text-cobalt" size={42} aria-hidden="true" />
+              <h2 className="mt-4 text-2xl font-semibold">Generate a stock intelligence report</h2>
+              <p className="mx-auto mt-2 max-w-xl text-slate-600">
+                Start with an NSE, BSE, or US ticker to see live price context at the top.
+              </p>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6 lg:grid-cols-[420px_1fr]">
         <section className="space-y-5">
           <div className="rounded border border-line bg-white p-4">
             <div className="mb-4 flex items-center gap-2">
@@ -195,9 +256,24 @@ export default function Home() {
                   className="mt-1 w-full rounded border border-line px-3 py-2 text-base uppercase outline-none focus:border-cobalt"
                   value={ticker}
                   onChange={(event) => setTicker(event.target.value.toUpperCase())}
-                  maxLength={10}
+                  maxLength={16}
                 />
               </label>
+              <label className="block text-sm font-medium">
+                Exchange
+                <select
+                  className="mt-1 w-full rounded border border-line bg-white px-3 py-2 text-sm outline-none focus:border-cobalt"
+                  value={exchange}
+                  onChange={(event) => setExchange(event.target.value)}
+                >
+                  <option value="NSE">NSE India</option>
+                  <option value="BSE">BSE India</option>
+                  <option value="US">US / entered symbol</option>
+                </select>
+              </label>
+              <p className="text-xs text-slate-600">
+                Active symbol: <span className="font-semibold">{activeTicker}</span>
+              </p>
               <label className="block text-sm font-medium">
                 Question
                 <textarea
@@ -253,7 +329,7 @@ export default function Home() {
               </select>
             </label>
             <p className="mt-2 text-xs leading-5 text-slate-600">
-              Market quotes arrive in USD. Display conversion uses {fx.provider}
+              Quotes keep their exchange currency and display conversion uses {fx.provider}
               {fx.fallback ? " fallback" : ""} rates from {fx.date}.
             </p>
           </div>
@@ -278,7 +354,7 @@ export default function Home() {
                       <span className="block font-semibold">{item.ticker}</span>
                       {item.market ? (
                         <span className="mt-1 block text-xs text-slate-500">
-                          Base {formatCurrency(item.market.price, "USD")} · {item.market.provider}
+                          Quote {formatCurrency(item.market.price, item.market.currency)} · {item.market.provider}
                         </span>
                       ) : null}
                     </button>
@@ -290,7 +366,7 @@ export default function Home() {
                     <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-2">
                       <div>
                         <p className="text-xs text-slate-500">Current price</p>
-                        <p className="text-lg font-semibold">{formatCurrency(convertedPrice(item.market.price))}</p>
+                        <p className="text-lg font-semibold">{formatCurrency(convertedPrice(item.market.price, item.market.currency))}</p>
                       </div>
                       <span className={item.market.changePct >= 0 ? "text-sm font-semibold text-pine" : "text-sm font-semibold text-rose"}>
                         {item.market.changePct.toFixed(2)}%
@@ -330,62 +406,36 @@ export default function Home() {
         </section>
 
         <section className="space-y-5">
-          {report ? (
-            <>
-              <div className="rounded border border-line bg-white p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-slate-500">{report.ticker}</p>
-                    <h2 className="mt-1 text-2xl font-semibold">{report.summary}</h2>
+          <div className="rounded border border-line bg-white p-5">
+            <div className="mb-3 flex items-center gap-2">
+              <Activity size={18} aria-hidden="true" />
+              <h2 className="text-base font-semibold">Live Market Mode</h2>
+            </div>
+            <div className="space-y-2 text-sm leading-6 text-slate-600">
+              <p>NSE symbols use `.NS` and BSE symbols use `.BO`. Example: `RELIANCE.NS` or `RELIANCE.BO`.</p>
+              <p>Prices refresh every 15 seconds while this page is open. Exchange data may be delayed by the upstream quote provider.</p>
+              <p>Use the watchlist refresh button for an immediate quote update.</p>
+            </div>
+          </div>
+          {report?.sources.length ? (
+            <div className="rounded border border-line bg-white p-5">
+              <h2 className="text-base font-semibold">Sources</h2>
+              <div className="mt-3 space-y-2">
+                {report.sources.slice(0, 8).map((source, index) => (
+                  <div className="text-sm" key={`${source.title}-${index}`}>
+                    {source.url ? (
+                      <a className="font-medium text-cobalt hover:underline" href={source.url} rel="noreferrer" target="_blank">
+                        {source.title}
+                      </a>
+                    ) : (
+                      <span className="font-medium">{source.title}</span>
+                    )}
+                    <span className="text-slate-500"> · {source.provider}</span>
                   </div>
-                  <div className="rounded border border-line px-4 py-3 text-right">
-                    <p className="text-sm text-slate-500">Confidence</p>
-                    <p className="text-2xl font-semibold">{report.confidence}%</p>
-                  </div>
-                </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  <Metric label={`Current price (${selectedCurrency})`} value={formatCurrency(priceInCurrency ?? report.market.price)} />
-                  <Metric label="Base price" value={formatCurrency(report.market.price, "USD")} />
-                  <Metric label="Move" value={`${report.market.changePct.toFixed(2)}%`} tone={report.market.changePct >= 0 ? "up" : "down"} />
-                  <Metric label="Provider" value={report.market.provider} />
-                </div>
-              </div>
-
-              <InsightSection icon={<Activity size={18} />} title="Move Drivers" items={report.moveDrivers} />
-              <InsightSection icon={<Newspaper size={18} />} title="News" items={report.news.map((item) => item.title)} />
-              <InsightSection icon={<FileText size={18} />} title="Filings" items={report.filings.map((item) => `${item.form}: ${item.title}`)} />
-              <InsightSection icon={<Radar size={18} />} title="Next Watch Items" items={report.nextWatchItems} />
-
-              <div className="rounded border border-line bg-white p-5">
-                <h2 className="text-base font-semibold">Sources</h2>
-                <div className="mt-3 space-y-2">
-                  {report.sources.slice(0, 8).map((source, index) => (
-                    <div className="text-sm" key={`${source.title}-${index}`}>
-                      {source.url ? (
-                        <a className="font-medium text-cobalt hover:underline" href={source.url} rel="noreferrer" target="_blank">
-                          {source.title}
-                        </a>
-                      ) : (
-                        <span className="font-medium">{source.title}</span>
-                      )}
-                      <span className="text-slate-500"> · {source.provider}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex min-h-[520px] items-center justify-center rounded border border-line bg-white p-8 text-center">
-              <div>
-                <Radar className="mx-auto text-cobalt" size={42} aria-hidden="true" />
-                <h2 className="mt-4 text-2xl font-semibold">Generate a stock intelligence report</h2>
-                <p className="mx-auto mt-2 max-w-xl text-slate-600">
-                  Start with a ticker to combine market data, recent news, SEC filing context, and a concise
-                  evidence-backed explanation.
-                </p>
+                ))}
               </div>
             </div>
-          )}
+          ) : null}
         </section>
       </div>
     </main>
@@ -418,4 +468,21 @@ function InsightSection({ icon, title, items }: { icon: React.ReactNode; title: 
       </ul>
     </div>
   );
+}
+
+function resolveMarketTicker(input: string, exchange: string) {
+  const symbol = input.trim().toUpperCase();
+  if (!symbol) return symbol;
+  if (symbol.includes(".")) return symbol;
+  if (exchange === "NSE") return `${symbol}.NS`;
+  if (exchange === "BSE") return `${symbol}.BO`;
+  return symbol;
+}
+
+function convertMarketPrice(value: number, fromCurrency: string | undefined, toCurrency: string, rates: Record<string, number>) {
+  const sourceCurrency = fromCurrency ?? "USD";
+  if (sourceCurrency === toCurrency) return value;
+  const fromRate = rates[sourceCurrency] ?? 1;
+  const toRate = rates[toCurrency] ?? 1;
+  return (value / fromRate) * toRate;
 }

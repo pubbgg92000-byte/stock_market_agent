@@ -4,7 +4,7 @@ export const tickerSchema = z
   .string()
   .trim()
   .toUpperCase()
-  .regex(/^[A-Z][A-Z0-9.-]{0,9}$/, "Use a valid US-listed ticker symbol.");
+  .regex(/^[A-Z][A-Z0-9.-]{0,15}$/, "Use a valid ticker symbol.");
 
 export const analyzeRequestSchema = z.object({
   ticker: tickerSchema,

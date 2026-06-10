@@ -3,9 +3,11 @@ import type { FilingItem, MarketSnapshot, NewsItem } from "@/lib/types";
 export function mockMarket(ticker: string): MarketSnapshot {
   const seed = ticker.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
   const changePct = Number((((seed % 90) - 45) / 10).toFixed(2));
+  const isIndianTicker = ticker.endsWith(".NS") || ticker.endsWith(".BO");
   return {
     ticker,
-    price: Number((80 + (seed % 320) + changePct).toFixed(2)),
+    price: Number((isIndianTicker ? 900 + (seed % 2200) : 80 + (seed % 320) + changePct).toFixed(2)),
+    currency: isIndianTicker ? "INR" : "USD",
     changePct,
     volume: 1_000_000 + seed * 431,
     provider: "demo",
