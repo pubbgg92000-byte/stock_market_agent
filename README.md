@@ -6,6 +6,7 @@ Prices are displayed in the user's local currency by default, with a selector fo
 Saved watchlist tickers show the latest available price, quote-currency price, percent move, and data provider.
 NSE and BSE quotes are supported with `.NS` and `.BO` suffixes, and the app can add those suffixes from the exchange selector.
 Watchlist and top report prices refresh every 15 seconds while the app is open.
+The dashboard includes a persistent light/dark theme toggle.
 
 ## Quick Start
 

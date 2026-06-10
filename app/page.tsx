@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Activity, Bell, BriefcaseBusiness, Coins, FileText, Newspaper, Radar, RefreshCw, Send, Star, Trash2 } from "lucide-react";
+import { Activity, Bell, BriefcaseBusiness, Coins, FileText, Moon, Newspaper, Radar, RefreshCw, Send, Star, Sun, Trash2 } from "lucide-react";
 import { FALLBACK_USD_RATES, REGION_CURRENCY, type FxRatesPayload } from "@/lib/currency";
 import type { AnalysisReportPayload, MarketSnapshot } from "@/lib/types";
 
@@ -40,6 +40,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   const configuredMode = useMemo(() => {
     if (!report) return "Ready";
@@ -75,6 +76,11 @@ export default function Home() {
 
   useEffect(() => {
     refreshLists().catch(() => setMessage("Could not load saved data."));
+    const savedTheme = window.localStorage.getItem("stock-agent-theme");
+    const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const nextTheme = savedTheme === "dark" || (!savedTheme && systemDark) ? "dark" : "light";
+    setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
     const locale = navigator.language || "en-IN";
     const region = locale.split("-")[1]?.toUpperCase();
     setDetectedCurrency(REGION_CURRENCY[region ?? "IN"] ?? "INR");
@@ -85,6 +91,13 @@ export default function Home() {
         setMessage("Using fallback currency rates.");
       });
   }, []);
+
+  function toggleTheme() {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    document.documentElement.dataset.theme = nextTheme;
+    window.localStorage.setItem("stock-agent-theme", nextTheme);
+  }
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -183,19 +196,25 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-paper text-ink">
-      <header className="border-b border-line bg-white">
+      <header className="border-b border-line bg-panel">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded bg-ink text-white">
+            <div className="flex h-10 w-10 items-center justify-center rounded bg-ink text-paper">
               <Radar size={21} aria-hidden="true" />
             </div>
             <div>
               <h1 className="text-xl font-semibold">Stock Market Agent</h1>
-              <p className="text-sm text-slate-600">Market moves, source-backed reports, and watchlist alerts.</p>
+              <p className="text-sm text-muted">Market moves, source-backed reports, and watchlist alerts.</p>
             </div>
           </div>
-          <div className="rounded border border-line bg-paper px-3 py-1.5 text-sm font-medium text-slate-700">
-            {configuredMode}
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary px-3" onClick={toggleTheme} type="button" title="Toggle theme">
+              {theme === "dark" ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+              {theme === "dark" ? "Light" : "Dark"}
+            </button>
+            <div className="rounded border border-line bg-paper px-3 py-1.5 text-sm font-medium text-muted">
+              {configuredMode}
+            </div>
           </div>
         </div>
       </header>
@@ -203,14 +222,14 @@ export default function Home() {
       <section className="mx-auto max-w-7xl px-5 pt-6">
         {report ? (
           <div className="space-y-5">
-            <div className="rounded border border-line bg-white p-5">
+            <div className="rounded border border-line bg-panel p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-slate-500">{report.ticker}</p>
+                  <p className="text-sm font-medium text-muted">{report.ticker}</p>
                   <h2 className="mt-1 text-2xl font-semibold">{report.summary}</h2>
                 </div>
                 <div className="rounded border border-line px-4 py-3 text-right">
-                  <p className="text-sm text-slate-500">Confidence</p>
+                  <p className="text-sm text-muted">Confidence</p>
                   <p className="text-2xl font-semibold">{report.confidence}%</p>
                 </div>
               </div>
@@ -230,11 +249,11 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          <div className="flex min-h-[280px] items-center justify-center rounded border border-line bg-white p-8 text-center">
+          <div className="flex min-h-[280px] items-center justify-center rounded border border-line bg-panel p-8 text-center">
             <div>
               <Radar className="mx-auto text-cobalt" size={42} aria-hidden="true" />
               <h2 className="mt-4 text-2xl font-semibold">Generate a stock intelligence report</h2>
-              <p className="mx-auto mt-2 max-w-xl text-slate-600">
+              <p className="mx-auto mt-2 max-w-xl text-muted">
                 Start with an NSE, BSE, or US ticker to see live price context at the top.
               </p>
             </div>
@@ -244,7 +263,7 @@ export default function Home() {
 
       <div className="mx-auto grid max-w-7xl gap-5 px-5 py-6 lg:grid-cols-[420px_1fr]">
         <section className="space-y-5">
-          <div className="rounded border border-line bg-white p-4">
+          <div className="rounded border border-line bg-panel p-4">
             <div className="mb-4 flex items-center gap-2">
               <Activity size={19} aria-hidden="true" />
               <h2 className="text-base font-semibold">Analyze Ticker</h2>
@@ -253,7 +272,7 @@ export default function Home() {
               <label className="block text-sm font-medium">
                 Ticker
                 <input
-                  className="mt-1 w-full rounded border border-line px-3 py-2 text-base uppercase outline-none focus:border-cobalt"
+                  className="field mt-1 w-full rounded border border-line px-3 py-2 text-base uppercase outline-none focus:border-cobalt"
                   value={ticker}
                   onChange={(event) => setTicker(event.target.value.toUpperCase())}
                   maxLength={16}
@@ -262,7 +281,7 @@ export default function Home() {
               <label className="block text-sm font-medium">
                 Exchange
                 <select
-                  className="mt-1 w-full rounded border border-line bg-white px-3 py-2 text-sm outline-none focus:border-cobalt"
+                  className="field mt-1 w-full rounded border border-line px-3 py-2 text-sm outline-none focus:border-cobalt"
                   value={exchange}
                   onChange={(event) => setExchange(event.target.value)}
                 >
@@ -271,13 +290,13 @@ export default function Home() {
                   <option value="US">US / entered symbol</option>
                 </select>
               </label>
-              <p className="text-xs text-slate-600">
+              <p className="text-xs text-muted">
                 Active symbol: <span className="font-semibold">{activeTicker}</span>
               </p>
               <label className="block text-sm font-medium">
                 Question
                 <textarea
-                  className="mt-1 min-h-24 w-full rounded border border-line px-3 py-2 text-sm outline-none focus:border-cobalt"
+                  className="field mt-1 min-h-24 w-full rounded border border-line px-3 py-2 text-sm outline-none focus:border-cobalt"
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
                 />
@@ -305,10 +324,10 @@ export default function Home() {
                 </button>
               </div>
             </form>
-            {message ? <p className="mt-3 text-sm text-slate-600">{message}</p> : null}
+            {message ? <p className="mt-3 text-sm text-muted">{message}</p> : null}
           </div>
 
-          <div className="rounded border border-line bg-white p-4">
+          <div className="rounded border border-line bg-panel p-4">
             <div className="mb-3 flex items-center gap-2">
               <Coins size={18} aria-hidden="true" />
               <h2 className="text-base font-semibold">Currency</h2>
@@ -316,7 +335,7 @@ export default function Home() {
             <label className="block text-sm font-medium">
               Display prices in
               <select
-                className="mt-1 w-full rounded border border-line bg-white px-3 py-2 text-sm outline-none focus:border-cobalt"
+                className="field mt-1 w-full rounded border border-line px-3 py-2 text-sm outline-none focus:border-cobalt"
                 value={currencyMode}
                 onChange={(event) => setCurrencyMode(event.target.value)}
               >
@@ -328,13 +347,13 @@ export default function Home() {
                 ))}
               </select>
             </label>
-            <p className="mt-2 text-xs leading-5 text-slate-600">
+            <p className="mt-2 text-xs leading-5 text-muted">
               Quotes keep their exchange currency and display conversion uses {fx.provider}
               {fx.fallback ? " fallback" : ""} rates from {fx.date}.
             </p>
           </div>
 
-          <div className="rounded border border-line bg-white p-4">
+          <div className="rounded border border-line bg-panel p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <BriefcaseBusiness size={18} aria-hidden="true" />
@@ -345,15 +364,15 @@ export default function Home() {
               </button>
             </div>
             <div className="space-y-2">
-              {watchlist.length === 0 ? <p className="text-sm text-slate-600">No saved tickers yet.</p> : null}
-              {watchlistLoading && watchlist.length > 0 ? <p className="text-xs text-slate-500">Refreshing prices...</p> : null}
+              {watchlist.length === 0 ? <p className="text-sm text-muted">No saved tickers yet.</p> : null}
+              {watchlistLoading && watchlist.length > 0 ? <p className="text-xs text-muted">Refreshing prices...</p> : null}
               {watchlist.map((item) => (
                 <div className="rounded border border-line px-3 py-2" key={item.id}>
                   <div className="flex items-start justify-between gap-3">
                     <button className="text-left" onClick={() => setTicker(item.ticker)} type="button">
                       <span className="block font-semibold">{item.ticker}</span>
                       {item.market ? (
-                        <span className="mt-1 block text-xs text-slate-500">
+                        <span className="mt-1 block text-xs text-muted">
                           Quote {formatCurrency(item.market.price, item.market.currency)} · {item.market.provider}
                         </span>
                       ) : null}
@@ -365,7 +384,7 @@ export default function Home() {
                   {item.market ? (
                     <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-2">
                       <div>
-                        <p className="text-xs text-slate-500">Current price</p>
+                        <p className="text-xs text-muted">Current price</p>
                         <p className="text-lg font-semibold">{formatCurrency(convertedPrice(item.market.price, item.market.currency))}</p>
                       </div>
                       <span className={item.market.changePct >= 0 ? "text-sm font-semibold text-pine" : "text-sm font-semibold text-rose"}>
@@ -373,20 +392,20 @@ export default function Home() {
                       </span>
                     </div>
                   ) : (
-                    <p className="mt-2 text-xs text-slate-500">Price unavailable.</p>
+                    <p className="mt-2 text-xs text-muted">Price unavailable.</p>
                   )}
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="rounded border border-line bg-white p-4">
+          <div className="rounded border border-line bg-panel p-4">
             <div className="mb-3 flex items-center gap-2">
               <Bell size={18} aria-hidden="true" />
               <h2 className="text-base font-semibold">Alert Rules</h2>
             </div>
             <div className="space-y-2">
-              {alerts.length === 0 ? <p className="text-sm text-slate-600">No alert rules yet.</p> : null}
+              {alerts.length === 0 ? <p className="text-sm text-muted">No alert rules yet.</p> : null}
               {alerts.map((rule) => (
                 <div className="rounded border border-line px-3 py-2" key={rule.id}>
                   <div className="flex items-center justify-between">
@@ -395,7 +414,7 @@ export default function Home() {
                       <Trash2 size={15} aria-hidden="true" />
                     </button>
                   </div>
-                  <p className="mt-1 text-xs text-slate-600">
+                  <p className="mt-1 text-xs text-muted">
                     Move &gt; {rule.priceMovePct}% · News {rule.newsImpact ? "on" : "off"} · Filings{" "}
                     {rule.filingDetected ? "on" : "off"}
                   </p>
@@ -406,19 +425,19 @@ export default function Home() {
         </section>
 
         <section className="space-y-5">
-          <div className="rounded border border-line bg-white p-5">
+          <div className="rounded border border-line bg-panel p-5">
             <div className="mb-3 flex items-center gap-2">
               <Activity size={18} aria-hidden="true" />
               <h2 className="text-base font-semibold">Live Market Mode</h2>
             </div>
-            <div className="space-y-2 text-sm leading-6 text-slate-600">
+            <div className="space-y-2 text-sm leading-6 text-muted">
               <p>NSE symbols use `.NS` and BSE symbols use `.BO`. Example: `RELIANCE.NS` or `RELIANCE.BO`.</p>
               <p>Prices refresh every 15 seconds while this page is open. Exchange data may be delayed by the upstream quote provider.</p>
               <p>Use the watchlist refresh button for an immediate quote update.</p>
             </div>
           </div>
           {report?.sources.length ? (
-            <div className="rounded border border-line bg-white p-5">
+            <div className="rounded border border-line bg-panel p-5">
               <h2 className="text-base font-semibold">Sources</h2>
               <div className="mt-3 space-y-2">
                 {report.sources.slice(0, 8).map((source, index) => (
@@ -430,7 +449,7 @@ export default function Home() {
                     ) : (
                       <span className="font-medium">{source.title}</span>
                     )}
-                    <span className="text-slate-500"> · {source.provider}</span>
+                    <span className="text-muted"> · {source.provider}</span>
                   </div>
                 ))}
               </div>
@@ -446,7 +465,7 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
   const toneClass = tone === "up" ? "text-pine" : tone === "down" ? "text-rose" : "text-ink";
   return (
     <div className="rounded border border-line bg-paper px-4 py-3">
-      <p className="text-sm text-slate-500">{label}</p>
+      <p className="text-sm text-muted">{label}</p>
       <p className={`mt-1 text-xl font-semibold ${toneClass}`}>{value}</p>
     </div>
   );
@@ -454,7 +473,7 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
 
 function InsightSection({ icon, title, items }: { icon: React.ReactNode; title: string; items: string[] }) {
   return (
-    <div className="rounded border border-line bg-white p-5">
+    <div className="rounded border border-line bg-panel p-5">
       <div className="mb-3 flex items-center gap-2">
         {icon}
         <h2 className="text-base font-semibold">{title}</h2>

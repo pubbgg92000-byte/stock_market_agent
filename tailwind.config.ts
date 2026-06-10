@@ -5,13 +5,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#111827",
-        paper: "#f7f8fb",
-        line: "#d8dee9",
-        cobalt: "#2563eb",
-        pine: "#047857",
-        amber: "#b45309",
-        rose: "#be123c"
+        ink: "var(--color-ink)",
+        muted: "var(--color-muted)",
+        paper: "var(--color-paper)",
+        panel: "var(--color-panel)",
+        line: "var(--color-line)",
+        cobalt: "var(--color-cobalt)",
+        pine: "var(--color-pine)",
+        amber: "var(--color-amber)",
+        rose: "var(--color-rose)"
       }
     }
   },
