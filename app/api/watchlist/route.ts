@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getMarketSnapshot } from "@/lib/providers/market";
 import { tickerSchema, watchlistRequestSchema } from "@/lib/validation";
 
 export async function GET() {
   const items = await prisma.watchlistItem.findMany({ orderBy: { createdAt: "asc" } });
-  return NextResponse.json({ items });
+  const pricedItems = await Promise.all(
+    items.map(async (item) => ({
+      ...item,
+      market: await getMarketSnapshot(item.ticker)
+    }))
+  );
+  return NextResponse.json({ items: pricedItems });
 }
 
 export async function POST(request: Request) {

@@ -1,14 +1,15 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Activity, Bell, BriefcaseBusiness, Coins, FileText, Newspaper, Radar, Send, Star, Trash2 } from "lucide-react";
+import { Activity, Bell, BriefcaseBusiness, Coins, FileText, Newspaper, Radar, RefreshCw, Send, Star, Trash2 } from "lucide-react";
 import { FALLBACK_USD_RATES, REGION_CURRENCY, type FxRatesPayload } from "@/lib/currency";
-import type { AnalysisReportPayload } from "@/lib/types";
+import type { AnalysisReportPayload, MarketSnapshot } from "@/lib/types";
 
 type WatchlistItem = {
   id: string;
   ticker: string;
   name?: string | null;
+  market?: MarketSnapshot;
 };
 
 type AlertRule = {
@@ -36,6 +37,7 @@ export default function Home() {
   const [currencyMode, setCurrencyMode] = useState("AUTO");
   const [detectedCurrency, setDetectedCurrency] = useState("INR");
   const [loading, setLoading] = useState(false);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [message, setMessage] = useState("");
 
   const configuredMode = useMemo(() => {
@@ -57,11 +59,16 @@ export default function Home() {
   }, [fx.rates, report, selectedCurrency]);
 
   async function refreshLists() {
-    const [watchlistResponse, alertResponse] = await Promise.all([fetch("/api/watchlist"), fetch("/api/alerts")]);
-    const watchlistData = await watchlistResponse.json();
-    const alertData = await alertResponse.json();
-    setWatchlist(watchlistData.items ?? []);
-    setAlerts(alertData.rules ?? []);
+    setWatchlistLoading(true);
+    try {
+      const [watchlistResponse, alertResponse] = await Promise.all([fetch("/api/watchlist"), fetch("/api/alerts")]);
+      const watchlistData = await watchlistResponse.json();
+      const alertData = await alertResponse.json();
+      setWatchlist(watchlistData.items ?? []);
+      setAlerts(alertData.rules ?? []);
+    } finally {
+      setWatchlistLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -106,6 +113,7 @@ export default function Home() {
   }
 
   async function addToWatchlist() {
+    setMessage("");
     const response = await fetch("/api/watchlist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -132,6 +140,10 @@ export default function Home() {
   async function removeWatchlistItem(symbol: string) {
     await fetch(`/api/watchlist?ticker=${symbol}`, { method: "DELETE" });
     await refreshLists();
+  }
+
+  function convertedPrice(price: number) {
+    return price * (fx.rates[selectedCurrency] ?? 1);
   }
 
   async function removeAlert(id: string) {
@@ -194,19 +206,26 @@ export default function Home() {
                   onChange={(event) => setQuestion(event.target.value)}
                 />
               </label>
-              <div className="grid grid-cols-3 gap-2">
-                <button className="btn-primary col-span-3" disabled={loading} type="submit">
+              <div className="grid grid-cols-2 gap-2">
+                <button className="btn-primary col-span-2" disabled={loading} type="submit">
                   <Send size={16} aria-hidden="true" />
                   {loading ? "Working" : "Generate"}
                 </button>
-                <button className="btn-secondary" onClick={addToWatchlist} type="button" title="Save ticker">
+                <button className="btn-secondary col-span-2" onClick={addToWatchlist} type="button" title="Add ticker to watchlist">
                   <Star size={16} aria-hidden="true" />
+                  Add to watchlist
+                </button>
+                <button className="btn-secondary" onClick={refreshLists} type="button" title="Refresh current prices">
+                  <RefreshCw size={16} aria-hidden="true" />
+                  Prices
                 </button>
                 <button className="btn-secondary" onClick={addAlert} type="button" title="Create alert">
                   <Bell size={16} aria-hidden="true" />
+                  Alert
                 </button>
-                <button className="btn-secondary" onClick={runMonitor} type="button" title="Run monitor">
+                <button className="btn-secondary col-span-2" onClick={runMonitor} type="button" title="Run monitor">
                   <Radar size={16} aria-hidden="true" />
+                  Run monitor
                 </button>
               </div>
             </form>
@@ -240,20 +259,46 @@ export default function Home() {
           </div>
 
           <div className="rounded border border-line bg-white p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <BriefcaseBusiness size={18} aria-hidden="true" />
-              <h2 className="text-base font-semibold">Watchlist</h2>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <BriefcaseBusiness size={18} aria-hidden="true" />
+                <h2 className="text-base font-semibold">Watchlist</h2>
+              </div>
+              <button className="icon-button" onClick={refreshLists} title="Refresh current prices" type="button">
+                <RefreshCw size={15} aria-hidden="true" />
+              </button>
             </div>
             <div className="space-y-2">
               {watchlist.length === 0 ? <p className="text-sm text-slate-600">No saved tickers yet.</p> : null}
+              {watchlistLoading && watchlist.length > 0 ? <p className="text-xs text-slate-500">Refreshing prices...</p> : null}
               {watchlist.map((item) => (
-                <div className="flex items-center justify-between rounded border border-line px-3 py-2" key={item.id}>
-                  <button className="font-semibold" onClick={() => setTicker(item.ticker)} type="button">
-                    {item.ticker}
-                  </button>
-                  <button className="icon-button" onClick={() => removeWatchlistItem(item.ticker)} title="Remove" type="button">
-                    <Trash2 size={15} aria-hidden="true" />
-                  </button>
+                <div className="rounded border border-line px-3 py-2" key={item.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <button className="text-left" onClick={() => setTicker(item.ticker)} type="button">
+                      <span className="block font-semibold">{item.ticker}</span>
+                      {item.market ? (
+                        <span className="mt-1 block text-xs text-slate-500">
+                          Base {formatCurrency(item.market.price, "USD")} · {item.market.provider}
+                        </span>
+                      ) : null}
+                    </button>
+                    <button className="icon-button" onClick={() => removeWatchlistItem(item.ticker)} title="Remove" type="button">
+                      <Trash2 size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                  {item.market ? (
+                    <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-2">
+                      <div>
+                        <p className="text-xs text-slate-500">Current price</p>
+                        <p className="text-lg font-semibold">{formatCurrency(convertedPrice(item.market.price))}</p>
+                      </div>
+                      <span className={item.market.changePct >= 0 ? "text-sm font-semibold text-pine" : "text-sm font-semibold text-rose"}>
+                        {item.market.changePct.toFixed(2)}%
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-500">Price unavailable.</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -299,7 +344,7 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  <Metric label={`Price (${selectedCurrency})`} value={formatCurrency(priceInCurrency ?? report.market.price)} />
+                  <Metric label={`Current price (${selectedCurrency})`} value={formatCurrency(priceInCurrency ?? report.market.price)} />
                   <Metric label="Base price" value={formatCurrency(report.market.price, "USD")} />
                   <Metric label="Move" value={`${report.market.changePct.toFixed(2)}%`} tone={report.market.changePct >= 0 ? "up" : "down"} />
                   <Metric label="Provider" value={report.market.provider} />
